@@ -1,4 +1,6 @@
+
 import os
+import json
 
 def stl_to_gltf(binary_stl_path, out_path, is_binary):
     import struct
@@ -82,7 +84,7 @@ def stl_to_gltf(binary_stl_path, out_path, is_binary):
     spacer_bytes = 2
     num_vertices_in_face = 3
 
-    vertices = {}
+    vertices = []
     indices = []
 
     if not is_binary:
@@ -116,21 +118,7 @@ def stl_to_gltf(binary_stl_path, out_path, is_binary):
         for i in range(0, len_data, 13):
             for j in range(3, 12, 3):
                 x, y, z = data[i+j:i+j+3]
-
-                x = int(x*100000)/100000
-                y = int(y*100000)/100000
-                z = int(z*100000)/100000
-
-                tuple_xyz = (x, y, z);
-
-                try:
-                    indices.append(vertices[tuple_xyz])
-                except KeyError:
-                    vertices[tuple_xyz] = vertices_length_counter
-                    vertices_length_counter += 1
-                    indices.append(vertices[tuple_xyz])
-
-
+                vertices += [(x,y,z)]
 
                 if x < minx: minx = x
                 if x > maxx: maxx = x
@@ -141,6 +129,8 @@ def stl_to_gltf(binary_stl_path, out_path, is_binary):
 
             # f.seek(spacer_bytes, 1) # skip the spacer
 
+    # Don't share indices
+    indices = range(len(vertices)*3)
     number_vertices = len(vertices)
     vertices_bytelength = number_vertices * vec3_bytes # each vec3 has 3 floats, each float is 4 bytes
     unpadded_indices_bytelength = number_vertices * unsigned_long_int_bytes
@@ -171,7 +161,7 @@ def stl_to_gltf(binary_stl_path, out_path, is_binary):
 
                 # accessors[0]
                 out_number_indices,
-                out_number_vertices - 1,
+                out_number_indices-1,
 
                 # accessors[1]
                 out_number_vertices,
@@ -201,6 +191,7 @@ def stl_to_gltf(binary_stl_path, out_path, is_binary):
         glb_out.extend(struct.pack('<I', padded_scene_len))
         glb_out.extend(struct.pack('<I', 0x4E4F534A)) # magic number for JSON
         glb_out.extend(scene)
+        json.dump(json.loads(scene),open('/tmp/scene.json','w'),indent=2)
 
         while len(glb_out) < body_offset:
             glb_out.extend(b' ')
@@ -216,12 +207,10 @@ def stl_to_gltf(binary_stl_path, out_path, is_binary):
     for i in range(indices_bytelength - unpadded_indices_bytelength):
         glb_out.extend(b' ')
 
-    vertices = dict((v, k) for k,v in vertices.items())
-
     # glb_out.extend(struct.pack('f',
     # print([each_v for vertices[v_counter] for v_counter in range(number_vertices)]) # magin number for BIN
-    vertices = [vertices[i] for i in range(number_vertices)]
-    flatten = lambda l: [item for sublist in l for item in sublist]
+    def flatten(l):
+      return [item for sublist in l for item in sublist]
 
     # for v_counter in :
         # v_3f = vertices[v_counter]
@@ -279,4 +268,3 @@ if __name__ == '__main__':
             os.mkdir(out_path)
 
     stl_to_gltf(path_to_stl, out_path, is_binary)
-
